@@ -1,24 +1,15 @@
-/** @typedef {{ asking: number, asked: number, suit: number }} QgfRequest */
-/** @typedef {boolean} QgfResponse */
+import * as Types from "./types.js";
+import { State } from "./state.js";
+import { assert } from "./util.js";
 
 /**
  * @param {number} asking 
  * @param {number} asked 
  * @param {number} suit 
- * @returns {Request}
+ * @returns {Types.QgfRequest}
  */
-
 function createRequest(asking, asked, suit) {
     return { asking, asked, suit };
-}
-
-/**
- * @param {boolean} response 
- * @returns {Request}
- */
-
-function createResponse(response) {
-    return { response };
 }
 
 /** @typedef {{ names: string[], cardCount: number, difficulty: number }} InitOptions */
@@ -37,92 +28,45 @@ class Game {
             2 -> IDs cards when requesting a suit previously unclaimed
             3 -> IDs cards based on multiplayer collapse
         */
-        this._State = paramedState(this._playerCount, this._cardCount);
-        this._state = this._State.begin();
+        this._state = State.begin(this._playerCount, this._cardCount);
     }
-}
-
-/** @typedef {{ exclude: boolean[], known: number[], unknown: number }} PlayerInfo */
-
-/** 
- * @template A, B
- * @typedef {{ success: boolean, value: A | B }} Result 
- */
-const Result = {
-    /**
-     * @template T, U
-     * @param {T} x
-     * @returns {Result<T, U>} 
-     */
-    success(x) {
-        return { success: true, value: x };
-    },
-    /**
-     * @template T, U
-     * @param {U} x
-     * @returns {Result<T, U>} 
-     */
-    failure(x) {
-        return { success: false, value: x };
-    }
-};
-
-const DIFFICULTY_LEVELS = 4;
-
-/** 
- * @param {number} playerCount
- * @param {number} cardsPerPlayer 
- */
-function paramedState(playerCount, cardsPerPlayer) {
-    return class State {
-        /**
-         * 
-         * @param {number} turn 
-         * @param {number[]} unrevealed 
-         * @param {PlayerInfo[]} players
-         */
-        constructor(turn, unrevealed, players) {
-            this._turn = turn;
-            this._unrevealed = unrevealed;
-            this._players = players;
-        }
-
-        /** @returns {State} */
-        static begin() {
-            return new State(
-                0,
-                Array(playerCount).fill(cardsPerPlayer),
-                Array(playerCount).fill(null).map(_ => ({
-                    exclude: Array(playerCount).fill(false),
-                    known: Array(playerCount * DIFFICULTY_LEVELS).fill(0),
-                    unknown: cardsPerPlayer
-                }))
-            );
-        }
-        
-        /**
-         * @param {QgfRequest} request
-         * @returns {Result<State, string>} 
-         */
-        processRequest(request) {
-            const { asking, asked, suit } = request;
-            if (this._players[asking].exclude[suit]) return Result.failure(`Player ${asking} cannot possibly have card ${suit}`);
-            
-        }
-
-        /**
-         * @param {QgfRequest} request
-         * @param {boolean} accept
-         * @returns {State | null}
-         */
-        processResponse(request, accept) {
-
-        }
-    };
 }
 
 const game = new Game({});
-new game._State();
+
+const example = [
+    // createRequest(0, 1, 0), false,
+    // createRequest(1, 0, 1), true,
+    // createRequest(2, 0, 0), true,
+    // createRequest(0, 1, 1), true,
+    // createRequest(1, 2, 2), true
+    createRequest(0, 2, 0), false,
+    createRequest(1, 2, 1), false,
+];
+
+assert(example.length % 2 === 0, "Example must be req res pairs");
+for (let i = 0; i < example.length; i += 2) {
+    /** @type {Types.QgfRequest} */
+    const request = example[i];
+    /** @type {boolean} */
+    const accept = example[i + 1];
+    
+    const pendingReq = game._state.processRequest(request);
+    if (!pendingReq.success) {
+        console.log(pendingReq.value);
+        break;
+    }
+    /** @type {State} */
+    const beforeRes = pendingReq.value;
+    const pendingRes = beforeRes.processResponse(request, accept);
+    if (!pendingRes.success) {
+        console.log(pendingRes.value);
+        break;
+    }
+    game._state = pendingRes.value;
+    console.log("New:", game._state);
+}
+
 
 /*
 playerInfo [excludes[...], known[...], unknown: 1]
